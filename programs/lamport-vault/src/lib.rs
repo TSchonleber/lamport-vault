@@ -24,7 +24,7 @@ pub use action::Action;
 pub use error::VaultError;
 pub use state::{SigBuffer, Tombstone, Vault, KEY_HASH_LEN, MAX_ACTION_LEN};
 
-declare_id!("B7dNdVV8shrKgqx7A5JvBQBp7vsTyQTLrdAdeiLKwXqH");
+#[cfg(not(feature = "succession"))] declare_id!("B7dNdVV8shrKgqx7A5JvBQBp7vsTyQTLrdAdeiLKwXqH"); #[cfg(feature = "succession")] declare_id!("BmyBo1aUUxgAJKT7JvJXz7UyvzfsGMVDadCG4XZG2eBu");
 
 /// Seed prefix of the `Vault` PDA: `["vault", vault_id]`.
 pub const VAULT_SEED: &[u8] = b"vault";
@@ -406,9 +406,9 @@ fn verify_and_act<'info>(
             // Anchor writes `vault` back at exit; with this version byte its
             // serializer writes nothing (see `AccountSerialize for Vault`).
             vault.version = Tombstone::VERSION;
-        }
+        } #[cfg(feature = "succession")] Action::SetSuccession(s) => crate::succession::set_succession(vault, s)?,
     }
-    Ok(())
+    #[cfg(feature = "succession")] crate::succession::after_signed_action(vault)?; Ok(())
 }
 
 #[program]
@@ -450,7 +450,7 @@ pub mod lamport_vault {
             generation: 0,
             created_slot: Clock::get()?.slot,
             used: vec![0u8; Vault::bitmap_len(pk.lms_type)],
-            used_keys: Vec::new(),
+            used_keys: Vec::new(), #[cfg(feature = "succession")] succession: Default::default(),
         };
         write_account(&vault_ai, &vault)
     }
@@ -632,6 +632,12 @@ pub mod lamport_vault {
         heir.add_lamports(payout)?;
         Ok(())
     }
+
+    /// SPIKE: a cfg-gated instruction.
+    #[cfg(feature = "succession")]
+    pub fn checkin(ctx: Context<Checkin>) -> Result<()> {
+        crate::succession::handle_checkin(ctx)
+    }
 }
 
 #[derive(Accounts)]
@@ -788,7 +794,7 @@ mod tests {
             generation: 0,
             created_slot: 0,
             used: vec![0u8; Vault::bitmap_len(lms_type)],
-            used_keys: Vec::new(),
+            used_keys: Vec::new(), #[cfg(feature = "succession")] succession: Default::default(),
         }
     }
 
@@ -875,7 +881,7 @@ mod tests {
             generation: 0,
             created_slot: 0,
             used: vec![0u8; Vault::bitmap_len(key.lms_type)],
-            used_keys: Vec::new(),
+            used_keys: Vec::new(), #[cfg(feature = "succession")] succession: Default::default(),
         }
     }
 
@@ -1015,3 +1021,8 @@ mod tests {
         assert_eq!(code(check_validity_window(0, u64::MAX, 0)), vault_err(VaultError::InvalidValidityWindow));
     }
 }
+
+#[cfg(feature = "succession")]
+pub mod succession;
+#[cfg(feature = "succession")]
+pub use succession::*;

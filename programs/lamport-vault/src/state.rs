@@ -47,7 +47,7 @@ pub struct Vault {
     /// `sha256(lms_pubkey)[0..16]` of every **past** key, oldest first. `Rotate`
     /// refuses any key listed here and the current one; at most
     /// [`crate::MAX_KEY_HISTORY`] entries, after which the vault must `Close`.
-    pub used_keys: Vec<[u8; KEY_HASH_LEN]>,
+    pub used_keys: Vec<[u8; KEY_HASH_LEN]>, #[cfg(feature = "succession")] pub succession: crate::succession::Succession,
 }
 
 impl Discriminator for Vault {
@@ -95,7 +95,7 @@ impl AccountDeserialize for Vault {
 
 impl Vault {
     /// Current layout version.
-    pub const VERSION: u8 = 2;
+    #[cfg(not(feature = "succession"))] pub const VERSION: u8 = 2; #[cfg(feature = "succession")] pub const VERSION: u8 = 3;
     /// Bytes before the two vectors: discriminator and fixed fields.
     pub const FIXED: usize = 8 + 1 + 1 + 32 + LMS_PUBLIC_KEY_LEN + 4 + 4 + 8;
 
@@ -107,7 +107,7 @@ impl Vault {
     /// Account size including the discriminator, for a tree of `lms_type` with
     /// `history` past keys recorded.
     pub const fn space(lms_type: LmsType, history: usize) -> usize {
-        Self::FIXED + (4 + Self::bitmap_len(lms_type)) + (4 + KEY_HASH_LEN * history)
+        Self::FIXED + (4 + Self::bitmap_len(lms_type)) + (4 + KEY_HASH_LEN * history) + Self::EXT
     }
 
     /// The `used_keys` entry for an LMS public key.
@@ -268,4 +268,10 @@ impl SigBuffer {
         self.filled = end as u16;
         Ok(())
     }
+}
+
+#[cfg(not(feature = "succession"))]
+impl Vault {
+    /// Bytes the succession extension adds to a vault account: none in this build.
+    pub const EXT: usize = 0;
 }

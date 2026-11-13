@@ -21,6 +21,8 @@ anchor-debug = []
 # Test build: MAX_KEY_HISTORY = 2 so the HistoryFull path is reachable in a test
 # (`anchor test -- --features small-history`). Never deploy with it.
 small-history = []
+# SPIKE: succession feature
+succession = []
 custom-heap = []
 custom-panic = []
 
