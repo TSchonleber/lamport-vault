@@ -631,13 +631,7 @@ pub mod lamport_vault {
         tomb_ai.sub_lamports(payout)?;
         heir.add_lamports(payout)?;
         Ok(())
-    }
-
-    /// SPIKE: a cfg-gated instruction.
-    #[cfg(feature = "succession")]
-    pub fn checkin(ctx: Context<Checkin>) -> Result<()> {
-        crate::succession::handle_checkin(ctx)
-    }
+    } #[cfg(feature = "succession")] pub fn checkin(ctx: Context<Checkin>) -> Result<()> { crate::succession::handle_checkin(ctx) }
 }
 
 #[derive(Accounts)]
