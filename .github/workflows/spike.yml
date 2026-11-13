@@ -1,0 +1,56 @@
+name: spike-succession-bytes
+
+# THROWAWAY (fork only, never for merge): builds the vault at several refs with the pinned
+# verifiable-build image and prints each ELF hash, to learn which kinds of edit keep the
+# default build byte-identical.
+
+on:
+  push:
+    branches: ["spike/ci"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SOLANA_VERIFY_VERSION: "0.5.2"
+  BASE_IMAGE: solanafoundation/solana-verifiable-build@sha256:0cf72459e089f3a928efd48b718d81817a8c1c380229edee2099dd651aaef3b9
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: "main", ref: "c4a4ccd5762242fb38a0b9922ef219bf0a09cba1", features: "" }
+          - { label: "line-shift", ref: "spike/line-shift", features: "" }
+          - { label: "shift-accounts", ref: "spike/shift-accounts", features: "" }
+          - { label: "hooks (default)", ref: "spike/succession-hooks", features: "" }
+          - { label: "hooks (succession)", ref: "spike/succession-hooks", features: "succession" }
+          - { label: "hooks-noshift (default)", ref: "spike/hooks-noshift", features: "" }
+          - { label: "hooks-noshift (succession)", ref: "spike/hooks-noshift", features: "succession" }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ matrix.ref }}
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10, toolchain: stable
+        with:
+          toolchain: stable
+      - name: Cache solana-verify
+        id: cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cargo/bin/solana-verify
+          key: solana-verify-${{ env.SOLANA_VERIFY_VERSION }}-${{ runner.os }}
+      - name: Install solana-verify
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo install --locked solana-verify --version "$SOLANA_VERIFY_VERSION"
+      - name: Build
+        run: solana-verify build --library-name lamport_vault --base-image "$BASE_IMAGE" ${{ matrix.features && format('-- --features {0}', matrix.features) || '' }}
+      - name: Hash
+        run: |
+          so=target/deploy/lamport_vault.so
+          echo "RESULT label=${{ matrix.label }} verify_hash=$(solana-verify get-executable-hash "$so" | tail -n1) sha256=$(sha256sum "$so" | cut -d' ' -f1) size=$(wc -c < "$so")"
